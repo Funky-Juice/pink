@@ -16,11 +16,9 @@ module.exports = function(grunt) {
       style: {
         options: {
           processors: [
-            require("autoprefixer")({browsers: [
-              "last 2 versions"
-            ]}),
-            require("css-mqpacker")({
-              sort: true
+            require("autoprefixer")(),
+            require("postcss-sort-media-queries")({
+              sort: "mobile-first"
             })
           ]
         },
@@ -36,18 +34,6 @@ module.exports = function(grunt) {
         files: {
           "build/css/style.min.css": ["build/css/style.css"]
         }
-      }
-    },
-
-    imagemin: {
-      images: {
-        options: {
-          optimizationlevel: 4
-        },
-        files: [{
-          expand: true,
-          src: ["build/img/**/*.{png,jpg,gif}"]
-        }]
       }
     },
 
@@ -70,26 +56,6 @@ module.exports = function(grunt) {
           expand: true,
           src: ["build/img/icons/*.svg"]
         }]
-      }
-    },
-
-    browserSync: {
-      server: {
-        bsFiles: {
-          src: [
-            "build/*.html",
-            "build/css/*.css",
-            "build/js/*.js"
-          ]
-        },
-        options: {
-          server: "build",
-          watchTask: true,
-          notify: false,
-          open: true,
-          cors: true,
-          ui: false
-        }
       }
     },
 
@@ -143,6 +109,47 @@ module.exports = function(grunt) {
         tasks: ["copy:js"]
       }
     }
+  });
+
+  grunt.registerTask("imagemin", "Optimize raster images", function () {
+    const done = this.async();
+    const fs = require("fs/promises");
+    const path = require("path");
+    const sharp = require("sharp");
+    const files = grunt.file.expand("build/img/**/*.{png,jpg,jpeg,gif}");
+
+    Promise.all(files.map(async (file) => {
+      const ext = path.extname(file).toLowerCase();
+      const input = await fs.readFile(file);
+      const image = sharp(input);
+      const output = ext === ".png"
+        ? await image.png({compressionLevel: 9}).toBuffer()
+        : ext === ".gif"
+          ? await image.gif().toBuffer()
+          : await image.jpeg({quality: 80, mozjpeg: true}).toBuffer();
+
+      if (output.length < input.length) {
+        await fs.writeFile(file, output);
+      }
+    })).then(() => done()).catch(done);
+  });
+
+  grunt.registerTask("browserSync", "Start the local server", function () {
+    const done = this.async();
+    const browserSync = require("browser-sync").create();
+
+    browserSync.init({
+      server: "build",
+      files: [
+        "build/*.html",
+        "build/css/*.css",
+        "build/js/*.js"
+      ],
+      notify: false,
+      open: true,
+      cors: true,
+      ui: false
+    }, (error) => done(error));
   });
 
   grunt.registerTask("serve", ["browserSync", "watch"]);
